@@ -20,10 +20,10 @@ class Listener < Redmine::Hook::Listener
 			I18n.t("field_assigned_to") => escape(issue.assigned_to.to_s)
 		}
 
-		facts_title = escape issue.description if issue.description
+		sections = escape_description issue.description if issue.description
 		facts[I18n.t("field_watcher")] = escape(issue.watcher_users.join(', ')) if Setting.plugin_redmine_microsoftteams['display_watchers'] == 'yes'
 
-		speak title, text, facts_title, facts, url
+		speak title, text, sections, facts, url
 	end
 
 	def redmine_microsoftteams_issues_edit_after_save(context={})
@@ -39,10 +39,10 @@ class Listener < Redmine::Hook::Listener
 		title = "#{escape issue.project}"
 		text = "#{escape journal.user.to_s} updated [#{escape issue}](#{object_url issue}) #{mentions journal.notes}"
 
-		facts_title = escape journal.notes if journal.notes
+		sections = escape_description journal.notes if journal.notes
 		facts = get_facts(journal)
 
-		speak title, text, facts_title, facts, url
+		speak title, text, sections, facts, url
 	end
 
 	def model_changeset_scan_commit_for_issue_ids_pre_issue_update(context={})
@@ -88,7 +88,8 @@ class Listener < Redmine::Hook::Listener
 		facts_title= ll(Setting.default_language, :text_status_changed_by_changeset, "[#{escape changeset.comments}](#{revision_url})")
 		facts = get_facts(journal)
 
-		speak title, text, facts_title, facts, url
+		sections = {:text => facts_title}
+		speak title, text, sections, facts, url
 	end
 
 	def controller_wiki_edit_after_save(context = { })
@@ -109,24 +110,28 @@ class Listener < Redmine::Hook::Listener
 			text = "#{comment}\n\n#{escape page.content.comments}"
 		end
 
-		facts_title = nil
+		sections = nil
 		facts = nil
 
-		speak title, text, facts_title, facts, url
+		speak title, text, sections, facts, url
 	end
 
-	def speak(title, text, facts_title=nil, facts=nil, url=nil)
+	def speak(title, text, sections=nil, facts=nil, url=nil)
 		url = Setting.plugin_redmine_microsoftteams['teams_url'] if not url
 
+		sections = [] if not sections
+
 		section = {}
-		section[:title] = facts_title if facts_title
 		section[:facts] = []
 		facts.each { |name, value| section[:facts] << {:name => name, :value => value}}
+		if section[:facts].length != 0
+			sections << section
+		end
 
 		msg = {}
 		msg[:title] = title if title
 		msg[:text] = text if text
-		msg[:sections] = [] << section if section
+		msg[:sections] = sections
 
 		begin
 			client = HTTPClient.new
@@ -146,10 +151,43 @@ private
 		return facts
 	end
 
+
+	def get_entry(x)
+		return {:text => escape(x) }
+	end
+	
+	def escape_description(msg)
+	  cpos = 0
+	  msgl = []
+	
+	  while cpos < msg.length
+		npos = msg.index('<pre>', cpos)
+		if npos == -1
+		  msgl.push(get_entry(msg[cpos..-1]))
+		  break
+		end
+	
+		if cpos != npos
+		  msgl.push(get_entry(msg[cpos...npos]))
+		end
+		cpos = npos + 5
+	
+		npos = msg.index('</pre>', cpos)
+		if npos == -1
+		  msgl.push(get_entry(msg[cpos..-1]))
+		  break
+		end
+	
+		msgl.push(get_entry("```\r\n" + msg[cpos...npos]))
+		cpos = npos + 6
+	  end
+	
+	  return msgl
+	end
+
+
 	def escape(msg)
 		subs = {
-			"<pre>" => "```",
-			"</pre>" => "```",
 			"&" => "&amp;",
 			"<" => "&lt;",
 			">" => "&gt;",
