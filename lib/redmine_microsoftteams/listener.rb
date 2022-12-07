@@ -178,7 +178,7 @@ private
 		  break
 		end
 	
-		msgl.push(get_entry("```\r\n" + msg[cpos...npos]))
+		msgl.push({:text => "```\r\n" + msg[cpos...npos]})
 		cpos = npos + 6
 	  end
 	
