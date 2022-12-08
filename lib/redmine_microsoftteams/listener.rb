@@ -155,14 +155,33 @@ private
   def get_entry(x)
     return {:text => escape(x) }
   end
-  
+
+  def find_end_of_tag(msg, spos, btag, etag)
+    current_index = spos
+    depth = 0
+    pre_tag_end = nil
+    # find outmost end of tag
+    while current_index < msg.length
+      if msg[current_index..current_index+btag.length-1] == btag
+        depth += 1
+      elsif msg[current_index..current_index+etag.length-1] == etag
+        depth -= 1
+          
+        if depth == 0
+          return current_index + etag.length
+        end             
+      end
+      current_index = current_index + 1
+    end
+  end
+
   def escape_description(msg)
     cpos = 0
     msgl = []
   
     while cpos < msg.length
       npos = msg.index('<pre>', cpos)
-      if npos == -1
+      if npos == nil
         msgl.push(get_entry(msg[cpos..-1]))
         break
       end
@@ -172,8 +191,8 @@ private
       end
       cpos = npos + 5
     
-      npos = msg.index('</pre>', cpos)
-      if npos == -1
+      npos = find_end_of_tag(msg, cpos, '<pre>', '</pre>')
+      if npos == nil
         msgl.push(get_entry(msg[cpos..-1]))
         break
       end
