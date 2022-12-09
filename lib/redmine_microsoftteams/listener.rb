@@ -157,21 +157,26 @@ private
   end
 
   def find_end_of_tag(msg, spos, btag, etag)
-    current_index = spos
+    cpos = spos
     depth = 0
     pre_tag_end = nil
     # find outmost end of tag
-    while current_index < msg.length
-      if msg[current_index..current_index+btag.length-1] == btag
+    while cpos < msg.length
+
+      if msg[cpos..cpos+btag.length-1] == btag
         depth += 1
-      elsif msg[current_index..current_index+etag.length-1] == etag
+        cpos += btag.length
+      elsif msg[cpos..cpos+etag.length-1] == etag
         depth -= 1
           
         if depth == 0
-          return current_index + etag.length
-        end             
+          return cpos + etag.length
+        end
+
+        cpos += etag.length
+      else        
+        cpos += 1
       end
-      current_index = current_index + 1
     end
   end
 
@@ -189,7 +194,7 @@ private
       if cpos != npos
         msgl.push(get_entry(msg[cpos...npos]))
       end
-      cpos = npos + 5
+      cpos = npos
     
       npos = find_end_of_tag(msg, cpos, '<pre>', '</pre>')
       if npos == nil
@@ -197,7 +202,7 @@ private
         break
       end
     
-      msgl.push({:text => "```\r\n" + msg[cpos...npos]})
+      msgl.push({:text => "```\r\n" + msg[cpos+5...npos-6]})
       cpos = npos + 6
     end
   
