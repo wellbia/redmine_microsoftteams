@@ -202,7 +202,7 @@ private
         break
       end
     
-      msgl.push({:text => "```\r\n" + msg[cpos+5...npos-6]})
+      msgl.push({:text => "```" + msg[cpos+5...npos-6]})
       cpos = npos
     end
   
