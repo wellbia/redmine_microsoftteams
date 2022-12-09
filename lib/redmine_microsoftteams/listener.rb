@@ -203,7 +203,7 @@ private
       end
     
       msgl.push({:text => "```\r\n" + msg[cpos+5...npos-6]})
-      cpos = npos + 6
+      cpos = npos
     end
   
     return msgl
