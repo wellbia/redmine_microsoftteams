@@ -133,6 +133,38 @@ class Listener < Redmine::Hook::Listener
     msg[:text] = text if text
     msg[:sections] = sections
 
+    # Create the Adaptive Card structure
+    fact_set = []
+    if facts
+      facts.each do |name, value|
+        fact_set << { "title": name, "value": value }
+      end
+    end
+
+    adaptive_card_sections = []
+    adaptive_card_sections << {
+      "type": "FactSet",
+      "facts": fact_set
+    } if fact_set.length != 0
+
+    adaptive_card = {
+      "type": "AdaptiveCard",
+      "version": "1.2",
+      "body": []
+    }
+
+    adaptive_card[:body] << { "type": "TextBlock", "text": title, "weight": "bolder", "size": "medium" } if title
+    adaptive_card[:body] << { "type": "TextBlock", "text": text, "wrap": true } if text
+    adaptive_card[:body].concat(adaptive_card_sections)
+
+    msg[:type] = "message"
+    msg[:attachments] = [
+      {
+        "contentType": "application/vnd.microsoft.card.adaptive",
+        "content": adaptive_card
+      }
+    ]
+
     begin
       client = HTTPClient.new
       client.ssl_config.cert_store.set_default_paths
