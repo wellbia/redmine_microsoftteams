@@ -8,8 +8,6 @@ es:
   label_option_no: "No"
   helper_settings_temas_url_webhook: |
     Genera una URL de "Incoming WebHook" desde la <a href="https://teams.com/apps/build/custom-integration">página de configuración de aplicaciones en Teams</a>. Esta URL se puede cambiar para cada proyecto creando un <a href="/custom_fields/new?type=ProjectCustomField">campo personalizado del proyecto</a> llamado "Teams URL" (sin comillas).
-  helper_settings_temas_url_channel: |
-    El canal se puede cambiar para cada proyecto creando un <a href="/custom_fields/new?type=ProjectCustomField">campo personalizado del proyecto</a> llamado "Teams Channel" (sin comillas). <strong>Para canales públicos, este valor debe comenzar con un <em>#</em>.</strong>
   wiki_updated_by: "actualizado por"
   issue_updated: "ha actualizó"
   issue_created: "ha creado"
