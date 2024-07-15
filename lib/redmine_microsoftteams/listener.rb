@@ -158,6 +158,7 @@ class Listener < Redmine::Hook::Listener
       adaptive_card[:body] << { "type": "TextBlock", "text": text, "wrap": true } if text
       adaptive_card[:body] << { "type": "TextBlock", "text": hash_to_string(sections), "wrap": true} if sections
       adaptive_card[:body].concat(adaptive_card_sections)
+      adaptive_card[:msteams] = { "width": "full" }
 
       msg = {}
       msg[:type] = "message"
@@ -250,7 +251,7 @@ private
       "&" => "&amp;",
       "<" => "&lt;",
       ">" => "&gt;",
-      "\r\n" => "<br/>",
+      "\r\n" => "\n\n",
       "[" => "&#91;",
       "]" => "&#93;",
       "\\" => "&#92;",
