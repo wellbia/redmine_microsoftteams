@@ -119,51 +119,55 @@ class Listener < Redmine::Hook::Listener
   def speak(title, text, sections=nil, facts=nil, url=nil)
     url = Setting.plugin_redmine_microsoftteams['teams_url'] if not url
 
-    sections = [] if not sections
+    if url.downcase.include?("webhook")
+      sections = [] if not sections
 
-    section = {}
-    section[:facts] = []
-    facts.each { |name, value| section[:facts] << {:name => name, :value => value}}
-    if section[:facts].length != 0
-      sections << section
-    end
-
-    msg = {}
-    msg[:title] = title if title
-    msg[:text] = text if text
-    msg[:sections] = sections
-
-    # Create the Adaptive Card structure
-    fact_set = []
-    if facts
-      facts.each do |name, value|
-        fact_set << { "title": name, "value": value }
+      section = {}
+      section[:facts] = []
+      facts.each { |name, value| section[:facts] << {:name => name, :value => value}}
+      if section[:facts].length != 0
+        sections << section
       end
-    end
 
-    adaptive_card_sections = []
-    adaptive_card_sections << {
-      "type": "FactSet",
-      "facts": fact_set
-    } if fact_set.length != 0
+      msg = {}
+      msg[:title] = title if title
+      msg[:text] = text if text
+      msg[:sections] = sections
+    else
+      # Create the Adaptive Card structure
+      fact_set = []
+      if facts
+        facts.each do |name, value|
+          fact_set << { "title": name, "value": value }
+        end
+      end
 
-    adaptive_card = {
-      "type": "AdaptiveCard",
-      "version": "1.2",
-      "body": []
-    }
+      adaptive_card_sections = []
+      adaptive_card_sections << {
+        "type": "FactSet",
+        "facts": fact_set
+      } if fact_set.length != 0
 
-    adaptive_card[:body] << { "type": "TextBlock", "text": title, "weight": "bolder", "size": "medium" } if title
-    adaptive_card[:body] << { "type": "TextBlock", "text": text, "wrap": true } if text
-    adaptive_card[:body].concat(adaptive_card_sections)
-
-    msg[:type] = "message"
-    msg[:attachments] = [
-      {
-        "contentType": "application/vnd.microsoft.card.adaptive",
-        "content": adaptive_card
+      adaptive_card = {
+        "type": "AdaptiveCard",
+        "version": "1.2",
+        "body": []
       }
-    ]
+
+      adaptive_card[:body] << { "type": "TextBlock", "text": title, "weight": "bolder", "size": "medium" } if title
+      adaptive_card[:body] << { "type": "TextBlock", "text": text, "wrap": true } if text
+      adaptive_card[:body] << { "type": "TextBlock", "text": hash_to_string(sections), "wrap": true} if sections
+      adaptive_card[:body].concat(adaptive_card_sections)
+
+      msg = {}
+      msg[:type] = "message"
+      msg[:attachments] = [
+        {
+          "contentType": "application/vnd.microsoft.card.adaptive",
+          "content": adaptive_card
+        }
+      ]
+    end
 
     begin
       client = HTTPClient.new
@@ -360,6 +364,10 @@ private
     # teams usernames may only contain lowercase letters, numbers,
     # dashes and underscores and must start with a letter or number.
     text.scan(/@[a-z0-9][a-z0-9_\-]*/).uniq
+  end
+
+  def hash_to_string(sections)
+    return sections.map { |hash| hash[:text] }.join
   end
 end
 end
