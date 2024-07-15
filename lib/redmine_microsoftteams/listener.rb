@@ -284,7 +284,7 @@ private
   def url_for_project(proj)
     return nil if proj.blank?
 
-    cf = ProjectCustomField.find_by_name("<%= l(:label_settings_teams_url) %>")
+    cf = ProjectCustomField.find_by_name("Teams URL")
 
     return [
       (proj.custom_value_for(cf).value rescue nil),
