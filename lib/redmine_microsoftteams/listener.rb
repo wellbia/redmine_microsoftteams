@@ -12,7 +12,7 @@ class Listener < Redmine::Hook::Listener
     return if issue.is_private?
 
     title = "#{escape issue.project}"
-    text = "#{escape issue.author} created [#{escape issue}](#{object_url issue}) #{mentions issue.description}"
+    text = "#{escape issue.author} #{l(:issue_created)} [#{escape issue}](#{object_url issue}) #{mentions issue.description}"
 
     facts = {
       I18n.t("field_status") => escape(issue.status.to_s),
@@ -37,7 +37,7 @@ class Listener < Redmine::Hook::Listener
     return unless url
 
     title = "#{escape issue.project}"
-    text = "#{escape journal.user.to_s} updated [#{escape issue}](#{object_url issue}) #{mentions journal.notes}"
+    text = "#{escape journal.user.to_s} #{l(:issue_updated)} [#{escape issue}](#{object_url issue}) #{mentions journal.notes}"
 
     sections = escape_description journal.notes if journal.notes
     facts = get_facts(journal)
@@ -56,7 +56,7 @@ class Listener < Redmine::Hook::Listener
     return if issue.is_private?
 
     title = "#{escape issue.project}"
-    text = "#{escape journal.user.to_s} updated [#{escape issue}](#{object_url issue})"
+    text = "#{escape journal.user.to_s} #{l(:issue_updated)} [#{escape issue}](#{object_url issue})"
 
     repository = changeset.repository
 
@@ -100,7 +100,7 @@ class Listener < Redmine::Hook::Listener
 
     user = page.content.author
     page_url = "[#{page.title}](#{object_url page})"
-    comment = "#{page_url} updated by *#{user}*"
+    comment = "#{page_url} #{l(:wiki_updated_by)} *#{user}*"
 
     url = url_for_project project
 
@@ -284,7 +284,7 @@ private
   def url_for_project(proj)
     return nil if proj.blank?
 
-    cf = ProjectCustomField.find_by_name("Teams URL")
+    cf = ProjectCustomField.find_by_name("<%= l(:label_settings_teams_url) %>")
 
     return [
       (proj.custom_value_for(cf).value rescue nil),
