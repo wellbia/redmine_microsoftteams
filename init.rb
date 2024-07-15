@@ -8,7 +8,7 @@ Redmine::Plugin.register :redmine_microsoftteams do
   url 'https://github.com/wellbia/redmine_microsoftteams'
   author_url 'https://github.com/wellbia'
   description 'Microsoft Teams chat integration'
-  version '0.1'
+  version '0.2.1'
 
   requires_redmine :version_or_higher => '0.8.0'
 
