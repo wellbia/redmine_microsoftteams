@@ -156,7 +156,12 @@ class Listener < Redmine::Hook::Listener
 
       adaptive_card[:body] << { "type": "TextBlock", "text": title, "weight": "bolder", "size": "medium" } if title
       adaptive_card[:body] << { "type": "TextBlock", "text": text, "wrap": true } if text
-      adaptive_card[:body] << { "type": "TextBlock", "text": hash_to_string(sections), "wrap": true} if sections
+      if sections
+        description = make_empty_space sections
+        description.each do |desc|
+          adaptive_card[:body] << desc
+        end
+      end
       adaptive_card[:body].concat(adaptive_card_sections)
       adaptive_card[:msteams] = { "width": "full" }
 
@@ -251,7 +256,7 @@ private
       "&" => "&amp;",
       "<" => "&lt;",
       ">" => "&gt;",
-      "\r\n" => "\n\n",
+      "\r" => "\n",
       "[" => "&#91;",
       "]" => "&#93;",
       "\\" => "&#92;",
@@ -369,6 +374,18 @@ private
 
   def hash_to_string(sections)
     return sections.map { |hash| hash[:text] }.join
+  end
+
+  def make_empty_space(sections)
+    body = []
+    contents = hash_to_string sections
+    blocks = contents.split("\n\n\n\n")
+    blocks.each do |block|
+      body << { "type": "TextBlock", "text": block, "wrap": true }
+      # mobile apps can't detect spacing block
+      body << { "type": "TextBlock", "text": "\n\n" }
+    end
+    return body
   end
 end
 end
