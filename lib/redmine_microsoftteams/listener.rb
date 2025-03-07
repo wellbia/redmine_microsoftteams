@@ -20,7 +20,7 @@ class Listener < Redmine::Hook::Listener
       I18n.t("field_assigned_to") => escape(issue.assigned_to.to_s)
     }
 
-    sections = escape_description issue.description if issue.description
+    sections = issue.description if issue.description
     facts[I18n.t("field_watcher")] = escape(issue.watcher_users.join(', ')) if Setting.plugin_redmine_microsoftteams['display_watchers'] == 'yes'
 
     speak title, text, sections, facts, url
@@ -39,7 +39,7 @@ class Listener < Redmine::Hook::Listener
     title = "#{escape issue.project}"
     text = "#{escape journal.user.to_s} #{l(:issue_updated)} [#{escape issue}](#{object_url issue}) #{mentions journal.notes}"
 
-    sections = escape_description journal.notes if journal.notes
+    sections = journal.notes if journal.notes
     facts = get_facts(journal)
 
     speak title, text, sections, facts, url
@@ -120,7 +120,11 @@ class Listener < Redmine::Hook::Listener
     url = Setting.plugin_redmine_microsoftteams['teams_url'] if not url
 
     if url.downcase.include?("webhook")
-      sections = [] if not sections
+      if sections
+        sections = escape_description limit_string_length sections
+      else
+        sections = []
+      end
 
       section = {}
       section[:facts] = []
@@ -156,7 +160,12 @@ class Listener < Redmine::Hook::Listener
 
       adaptive_card[:body] << { "type": "TextBlock", "text": title, "weight": "bolder", "size": "medium" } if title
       adaptive_card[:body] << { "type": "TextBlock", "text": text, "wrap": true } if text
-      adaptive_card[:body] << { "type": "TextBlock", "text": hash_to_string(sections), "wrap": true} if sections
+      if sections
+        description = get_adaptive_format limit_string_length sections
+        description.each do |desc|
+          adaptive_card[:body] << desc
+        end
+      end
       adaptive_card[:body].concat(adaptive_card_sections)
       adaptive_card[:msteams] = { "width": "full" }
 
@@ -251,7 +260,7 @@ private
       "&" => "&amp;",
       "<" => "&lt;",
       ">" => "&gt;",
-      "\r\n" => "\n\n",
+      "\r" => "\n",
       "[" => "&#91;",
       "]" => "&#93;",
       "\\" => "&#92;",
@@ -367,8 +376,38 @@ private
     text.scan(/@[a-z0-9][a-z0-9_\-]*/).uniq
   end
 
-  def hash_to_string(sections)
-    return sections.map { |hash| hash[:text] }.join
+  def extract_pre_content(text)
+    results = []
+    matches = text.scan(/(?:<pre>(.*?)<\/pre>|(.*?))(?=<pre>|$)/m)
+    matches.each do |match|
+      if match[0].nil?
+        results << { content: match[1].strip, is_pre: false } if not match[1].empty?
+      else
+        results << { content: match[0].strip, is_pre: true }
+      end
+    end
+    return results
+  end
+
+  def get_adaptive_format(sections)
+    body = []
+    results = extract_pre_content(sections.to_s.gsub("\r", "\n"))
+    results.each do |result|
+      if result[:is_pre]
+        body << {"type": "TextBlock", "text": result[:content], "wrap": true, "fontType": "monospace"}
+      else
+        body << {"type": "TextBlock", "text": result[:content], "wrap": true}
+      end
+    end
+    return body
+  end
+
+  def limit_string_length(str)
+    if str.length > 14000
+      str[0..14000] + "..."
+    else
+      str
+    end
   end
 end
 end
