@@ -121,7 +121,7 @@ class Listener < Redmine::Hook::Listener
 
     if url.downcase.include?("webhook")
       if sections
-        sections = escape_description sections
+        sections = escape_description limit_string_length sections
       else
         sections = []
       end
@@ -161,7 +161,7 @@ class Listener < Redmine::Hook::Listener
       adaptive_card[:body] << { "type": "TextBlock", "text": title, "weight": "bolder", "size": "medium" } if title
       adaptive_card[:body] << { "type": "TextBlock", "text": text, "wrap": true } if text
       if sections
-        description = get_adpative_format sections
+        description = get_adaptive_format limit_string_length sections
         description.each do |desc|
           adaptive_card[:body] << desc
         end
@@ -379,7 +379,6 @@ private
   def extract_pre_content(text)
     results = []
     matches = text.scan(/(?:<pre>(.*?)<\/pre>|(.*?))(?=<pre>|$)/m)
-    puts matches
     matches.each do |match|
       if match[0].nil?
         results << { content: match[1].strip, is_pre: false } if not match[1].empty?
@@ -390,7 +389,7 @@ private
     return results
   end
 
-  def get_adpative_format(sections)
+  def get_adaptive_format(sections)
     body = []
     results = extract_pre_content(sections.to_s.gsub("\r", "\n"))
     results.each do |result|
@@ -401,6 +400,14 @@ private
       end
     end
     return body
+  end
+
+  def limit_string_length(str)
+    if str.length > 14000
+      str[0..14000] + "..."
+    else
+      str
+    end
   end
 end
 end
