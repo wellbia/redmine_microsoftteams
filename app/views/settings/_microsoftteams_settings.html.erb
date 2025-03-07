@@ -1,26 +1,23 @@
 <p>
-  <label for="settings_teams_url">Teams URL</label>
+  <label for="settings_teams_url"><%= l(:label_settings_teams_url) %></label>
   <input type="text" id="settings_teams_url" size=80 value="<%= settings['teams_url'] %>" name="settings[teams_url]" />
 </p>
+<p><%= l(:helper_settings_temas_url_webhook).html_safe %></p>
 
 <p>
-  Generate an "Incoming WebHook" URL from the <a href="https://teams.com/apps/build/custom-integration">apps configuration page on Teams</a>. This URL can be changed on a per-project basis by creating a <a href="/custom_fields/new?type=ProjectCustomField">project custom field</a> named "Teams URL" (without quotes).
-</p>
-
-<p>
-  <label for="settings_display_watchers">Display Watchers?</label>
+  <label for="settings_display_watchers"><%= l(:label_settings_display_watchers) %></label>
   <select id="settings_display_watchers" value="<%= settings['display_watchers'] %>" name="settings[display_watchers]">
-    <option value="yes">Yes</option>
-    <option value="no" <%= settings['display_watchers'] != 'yes' ? %q(selected="selected") : '' %>>No</option>
+    <option value="yes"><%= l(:label_option_yes) %></option>
+    <option value="no" <%= settings['display_watchers'] != 'yes' ? %q(selected="selected") : '' %>><%= l(:label_option_no) %></option>
   </select>
 </p>
 
 <p>
-  <label for="settings_post_updates">Post Issue Updates?</label>
+  <label for="settings_post_updates"><%= l(:label_settings_post_issue_updates) %></label>
   <input type="checkbox" id="settings_post_updates" value="1" name="settings[post_updates]" <%= settings['post_updates'] == '1' ? 'checked="checked"' : '' %> />
 </p>
 
 <p>
-  <label for="settings_post_wiki_updates">Post Wiki Updates?</label>
+  <label for="settings_post_wiki_updates"><%= l(:label_settings_post_wiki_updates) %></label>
   <input type="checkbox" id="settings_post_wiki_updates" value="1" name="settings[post_wiki_updates]" <%= settings['post_wiki_updates'] == '1' ? 'checked="checked"' : '' %> />
 </p>
