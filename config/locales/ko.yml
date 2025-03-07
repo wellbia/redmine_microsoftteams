@@ -1,13 +1,13 @@
 # Korean translations for Ruby on Rails
 ko:
   label_settings_teams_url: "Teams URL"
-  label_settings_display_watchers: "일감 관람자?"
+  label_settings_display_watchers: "일감 관람자 표시"
   label_settings_post_issue_updates : "이슈 업데이트 시 전송"
   label_settings_post_wiki_updates : "위키 업데이트 시 전송"
   label_option_yes : "네"
   label_option_no : "아니오"
   helper_settings_temas_url_webhook: |
-    Teams Workflows에서 '웹후크 요청이 수신되면 채널에 게시'를 생성하세요. <a href="/custom_fields/new?type=ProjectCustomField">project custom field</a>에서 "Teams URL"(따옴표 제거)을 설정하면 프로젝트별로 설정이 가능합니다.
+    Teams Workflows에서 <a href="https://support.microsoft.com/en-us/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498">"웹후크 요청이 수신되면 채널에 게시"</a>를 생성하세요. <a href="/custom_fields/new?type=ProjectCustomField">project custom field</a>에서 "Teams URL"(따옴표 제거)을 설정하면 프로젝트별로 설정이 가능합니다.
   wiki_updated_by: "updated by"
   issue_updated: "updated"
   issue_created: "created"
