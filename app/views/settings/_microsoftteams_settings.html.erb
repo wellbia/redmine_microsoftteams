@@ -16,6 +16,10 @@
   <label for="settings_post_updates"><%= l(:label_settings_post_issue_updates) %></label>
   <input type="checkbox" id="settings_post_updates" value="1" name="settings[post_updates]" <%= settings['post_updates'] == '1' ? 'checked="checked"' : '' %> />
 </p>
+<p>
+  <label for="settings_webhook_role"><%= l(:label_role) %></label>
+  <%= text_field_tag 'settings[webhook_role]', @settings['webhook_role'] %>
+</p>
 
 <p>
   <label for="settings_post_wiki_updates"><%= l(:label_settings_post_wiki_updates) %></label>
