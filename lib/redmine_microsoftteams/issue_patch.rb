@@ -16,17 +16,27 @@ module RedmineMicrosoftteams
     module InstanceMethods
       def create_from_issue
         @create_already_fired = true
-        Redmine::Hook.call_hook(:redmine_microsoftteams_issues_new_after_save, { :issue => self})
+        if user_has_role?
+          Redmine::Hook.call_hook(:redmine_microsoftteams_issues_new_after_save, { :issue => self})
+        end
         return true
       end
 
       def save_from_issue
         if not @create_already_fired
-          Redmine::Hook.call_hook(:redmine_microsoftteams_issues_edit_after_save, { :issue => self, :journal => self.current_journal}) unless self.current_journal.nil?
+          if user_has_role?
+            Redmine::Hook.call_hook(:redmine_microsoftteams_issues_edit_after_save, { :issue => self, :journal => self.current_journal}) unless self.current_journal.nil?
+          end
         end
         return true
       end
-
+      private
+      def user_has_role?
+        role_name = Setting.plugin_redmine_microsoftteams['webhook_role']
+        user = User.current
+        return false unless user && user.logged?
+        user.roles.any? { |role| role.name == role_name }
+      end  
     end
   end
 end
