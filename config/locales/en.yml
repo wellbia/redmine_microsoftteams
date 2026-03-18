@@ -4,6 +4,7 @@ en:
   label_settings_display_watchers: "Display Watchers?"
   label_settings_post_issue_updates : "Post Issue Updates?"
   label_settings_post_wiki_updates : "Post Wiki Updates?"
+  label_role: "Webhook Notification Role"
   label_option_yes : "Yes"
   label_option_no : "No"
   helper_settings_temas_url_webhook: |

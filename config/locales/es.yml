@@ -4,6 +4,7 @@ es:
   label_settings_display_watchers: "¿Mostrar Observadores?"
   label_settings_post_issue_updates: "¿Publicar Actualizaciones de Incidencias?"
   label_settings_post_wiki_updates: "¿Publicar Actualizaciones del Wiki?"
+  label_role: "Rol para notificaciones de webhook"
   label_option_yes: "Sí"
   label_option_no: "No"
   helper_settings_temas_url_webhook: |

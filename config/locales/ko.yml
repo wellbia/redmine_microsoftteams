@@ -4,6 +4,7 @@ ko:
   label_settings_display_watchers: "일감 관람자 표시"
   label_settings_post_issue_updates : "이슈 업데이트 시 전송"
   label_settings_post_wiki_updates : "위키 업데이트 시 전송"
+  label_role: "웹훅 알림 역할"
   label_option_yes : "네"
   label_option_no : "아니오"
   helper_settings_temas_url_webhook: |
