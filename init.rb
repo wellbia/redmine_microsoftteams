@@ -15,7 +15,7 @@ Redmine::Plugin.register :redmine_microsoftteams do
   settings \
     :default => {
       'display_watchers' => 'no',
-      'webhook_role' => 'Customer'
+      'webhook_role' => ''
     },
     :partial => 'settings/microsoftteams_settings'
 end
