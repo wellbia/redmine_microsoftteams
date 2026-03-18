@@ -33,10 +33,11 @@ module RedmineMicrosoftteams
       private
       def user_has_role?
         role_name = Setting.plugin_redmine_microsoftteams['webhook_role']
+        return true if role_name.blank?
         user = User.current
         return false unless user && user.logged?
-        user.roles.any? { |role| role.name == role_name }
-      end  
+        user.roles_for_project(self.project).any? { |role| role.name == role_name }
+      end
     end
   end
 end
