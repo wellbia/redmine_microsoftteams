@@ -7,6 +7,9 @@ es:
   label_role: "Rol para notificaciones de webhook"
   label_option_yes: "Sí"
   label_option_no: "No"
+  label_module_microsoftteams: "Webhook"
+  project_module_microsoftteams: "Webhook"
+  permission_receive_microsoftteams_notifications: "Recibir notificaciones de Microsoft Teams"
   helper_settings_temas_url_webhook: |
     Genere un <a href="https://support.microsoft.com/es-es/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498">"Webhooks entrantes con flujos de trabajo"</a> en Microsoft Workflows. Esta URL se puede cambiar para cada proyecto creando un <a href="/custom_fields/new?type=ProjectCustomField">campo personalizado del proyecto</a> llamado "Teams URL" (sin comillas).
   wiki_updated_by: "actualizado por"

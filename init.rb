@@ -12,6 +12,10 @@ Redmine::Plugin.register :redmine_microsoftteams do
 
   requires_redmine :version_or_higher => '0.8.0'
 
+  project_module :microsoftteams do
+    permission :receive_microsoftteams_notifications, {}, :public => true
+  end
+
   settings \
     :default => {
       'display_watchers' => 'no',

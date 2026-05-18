@@ -6,6 +6,8 @@ class Listener < Redmine::Hook::Listener
   def redmine_microsoftteams_issues_new_after_save(context={})
     issue = context[:issue]
 
+    return unless microsoftteams_enabled_for_project?(issue.project)
+
     url = url_for_project issue.project
 
     return unless url
@@ -32,6 +34,7 @@ class Listener < Redmine::Hook::Listener
     issue = context[:issue]
     journal = context[:journal]
     return if issue.is_private? || journal.private_notes?
+    return unless microsoftteams_enabled_for_project?(issue.project)
 
     url = url_for_project issue.project
     return unless url
@@ -49,6 +52,8 @@ class Listener < Redmine::Hook::Listener
     issue = context[:issue]
     journal = issue.current_journal
     changeset = context[:changeset]
+
+    return unless microsoftteams_enabled_for_project?(issue.project)
 
     url = url_for_project issue.project
 
@@ -97,6 +102,7 @@ class Listener < Redmine::Hook::Listener
 
     project = context[:project]
     page = context[:page]
+    return unless microsoftteams_enabled_for_project?(project)
 
     user = page.content.author
     page_url = "[#{page.title}](#{object_url page})"
@@ -301,6 +307,13 @@ private
       (url_for_project proj.parent),
       Setting.plugin_redmine_microsoftteams['teams_url'],
     ].find{|v| v.present?}
+  end
+
+  def microsoftteams_enabled_for_project?(project)
+    return false if project.blank?
+    return true unless project.respond_to?(:module_enabled?)
+
+    project.module_enabled?(:microsoftteams)
   end
 
   def detail_to_field(detail)

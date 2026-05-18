@@ -19,9 +19,16 @@ from the plugin directory.
 
 Restart Redmine, and you should see the plugin show up in the Plugins page. Under the configuration options, set the Teams URL to the url for Microsoft Teams Incoming Webhook in your Microsoft Teams channel.
 
+Run plugin migrations to enable the Microsoft Teams project module for existing projects and add it to Redmine's default project modules:
+```
+bundle exec rake redmine:plugins:migrate RAILS_ENV=production
+```
+
 ## Customized Routing
 
 You can also route messages to different channels on a per-project basis. To do this, create a project custom field (Administration > Custom fields > Project) named `Teams URL`. If no custom channel is defined for a project, the parent project will be checked(or the default will be used). To prevent all notifications from being sent for a project, set the custom channel to `-`.
+
+Microsoft Teams notifications can be enabled or disabled per project from Project settings > Modules. The `Microsoft Teams webhook` module is enabled by default; uncheck it to disable all Teams notifications for that project.
 
 ## Difference with redmine-slack Plugin
 
