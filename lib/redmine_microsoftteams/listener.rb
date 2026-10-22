@@ -1,5 +1,7 @@
 require 'httpclient'
 require 'json'
+require 'cgi'
+require_relative 'adaptive_formatter'
 
 module RedmineMicrosoftteams
 class Listener < Redmine::Hook::Listener
@@ -25,7 +27,7 @@ class Listener < Redmine::Hook::Listener
     sections = issue.description if issue.description
     facts[I18n.t("field_watcher")] = escape(issue.watcher_users.join(', ')) if Setting.plugin_redmine_microsoftteams['display_watchers'] == 'yes'
 
-    speak title, text, sections, facts, url
+    speak title, text, sections, facts, url, issue
   end
 
   def redmine_microsoftteams_issues_edit_after_save(context={})
@@ -43,9 +45,9 @@ class Listener < Redmine::Hook::Listener
     text = "#{escape journal.user.to_s} #{l(:issue_updated)} [#{escape issue}](#{object_url issue}) #{mentions journal.notes}"
 
     sections = journal.notes if journal.notes
-    facts = get_facts(journal)
+    facts = get_facts(journal, !url.downcase.include?("webhook"))
 
-    speak title, text, sections, facts, url
+    speak title, text, sections, facts, url, issue, journal
   end
 
   def model_changeset_scan_commit_for_issue_ids_pre_issue_update(context={})
@@ -90,11 +92,18 @@ class Listener < Redmine::Hook::Listener
       )
     end
 
-    facts_title= ll(Setting.default_language, :text_status_changed_by_changeset, "[#{escape changeset.comments}](#{revision_url})")
-    facts = get_facts(journal)
+    revision_link = "[#{escape changeset.comments}](#{revision_url})"
+    facts_title = ll(Setting.default_language, :text_status_changed_by_changeset, revision_link)
+    facts = get_facts(journal, !url.downcase.include?("webhook"))
 
-    sections = {:text => facts_title}
-    speak title, text, sections, facts, url
+    before, _, after = facts_title.partition(revision_link)
+    sections = {:text => facts_title, :inlines => [
+      {:type => 'TextRun', :text => before},
+      {:type => 'TextRun', :text => changeset.comments.to_s,
+       :selectAction => {:type => 'Action.OpenUrl', :url => revision_url}},
+      {:type => 'TextRun', :text => after}
+    ]}
+    speak title, text, sections, facts, url, issue, journal
   end
 
   def controller_wiki_edit_after_save(context = { })
@@ -119,14 +128,15 @@ class Listener < Redmine::Hook::Listener
     sections = nil
     facts = nil
 
-    speak title, text, sections, facts, url
+    speak title, text, sections, facts, url, page
   end
 
-  def speak(title, text, sections=nil, facts=nil, url=nil)
+  def speak(title, text, sections=nil, facts=nil, url=nil, object=nil, journal=nil)
     url = Setting.plugin_redmine_microsoftteams['teams_url'] if not url
 
     if url.downcase.include?("webhook")
       if sections
+        sections = sections[:text] if sections.is_a?(Hash)
         sections = escape_description limit_string_length sections
       else
         sections = []
@@ -145,10 +155,11 @@ class Listener < Redmine::Hook::Listener
       msg[:sections] = sections
     else
       # Create the Adaptive Card structure
+      subject_change = journal.details.detect { |detail| detail.property == 'attr' && detail.prop_key == 'subject' } if journal && object.is_a?(Issue)
       fact_set = []
       if facts
         facts.each do |name, value|
-          fact_set << { "title": name, "value": value }
+          fact_set << { "title": name, "value": CGI.unescapeHTML(value.to_s) }
         end
       end
 
@@ -164,25 +175,135 @@ class Listener < Redmine::Hook::Listener
         "body": []
       }
 
-      adaptive_card[:body] << { "type": "TextBlock", "text": title, "weight": "bolder", "size": "medium" } if title
-      adaptive_card[:body] << { "type": "TextBlock", "text": text, "wrap": true } if text
-      if sections
-        description = get_adaptive_format limit_string_length sections
-        description.each do |desc|
-          adaptive_card[:body] << desc
-        end
+      if title
+        adaptive_card[:body] << {:type => 'RichTextBlock', :inlines => [
+          {:type => 'TextRun', :text => CGI.unescapeHTML(title), :weight => 'Bolder', :size => 'Medium'}
+        ]}
+      end
+      if object.is_a?(Issue)
+        author = journal ? journal.user : object.author
+        activity = journal ? l(:issue_updated) : l(:issue_created)
+        adaptive_card[:body] << {:type => 'RichTextBlock', :inlines => [
+          {:type => 'TextRun', :text => "#{author} #{activity} "},
+          {:type => 'TextRun', :text => subject_change ? "#{object.tracker} ##{object.id}" : object.to_s, :weight => 'Bolder',
+           :selectAction => {:type => 'Action.OpenUrl', :url => object_url(object)}}
+        ]}
+      elsif text && object.is_a?(WikiPage)
+        adaptive_card[:body] << {:type => 'RichTextBlock', :inlines => [
+          {:type => 'TextRun', :text => object.title,
+           :selectAction => {:type => 'Action.OpenUrl', :url => object_url(object)}},
+          {:type => 'TextRun', :text => " #{l(:wiki_updated_by)} "},
+          {:type => 'TextRun', :text => object.content.author.to_s, :italic => true}
+        ]}
+        adaptive_card[:body] << {:type => 'RichTextBlock', :inlines => [
+          {:type => 'TextRun', :text => object.content.comments.to_s}
+        ]}
+      elsif text
+        adaptive_card[:body] << { "type": "TextBlock", "text": CGI.unescapeHTML(text), "wrap": true }
+      end
+      if subject_change
+        old_title = subject_change.old_value.presence || I18n.t(:label_none)
+        new_title = subject_change.value.presence || I18n.t(:label_none)
+        adaptive_card[:body] << {:type => 'ColumnSet', :columns => [
+          {:type => 'Column', :width => 'auto', :items => [
+            {:type => 'RichTextBlock', :inlines => [
+              {:type => 'TextRun', :text => I18n.t(:field_subject), :weight => 'Bolder'}
+            ]}
+          ]},
+          {:type => 'Column', :width => 'stretch', :items => [
+            {:type => 'RichTextBlock', :inlines => [
+              {:type => 'TextRun', :text => "#{old_title}\n→ #{new_title}"}
+            ]}
+          ]}
+        ]}
       end
       adaptive_card[:body].concat(adaptive_card_sections)
-      adaptive_card[:msteams] = { "width": "full" }
+      description = []
+      truncated = false
+      base_url = object ? object_url(object) : "#{Setting.protocol}://#{Setting.host_name}/"
+      sources = []
+      changed_description = journal.details.detect { |detail| detail.property == 'attr' && detail.prop_key == 'description' } if journal && !sections.is_a?(Hash)
+      if changed_description
+        inlines = [{:type => 'TextRun', :text => l(:field_description), :weight => 'Bolder'}]
+        if journal.persisted? && changed_description.persisted?
+          object_path = Rails.application.routes.url_for(object.event_url(:only_path => true, :script_name => ''))
+          base_path = URI.parse(base_url).path
+          prefix = base_path.end_with?(object_path) ? base_path[0, base_path.length - object_path.length] : ''
+          path = Rails.application.routes.url_helpers.diff_journal_path(journal.id, :detail_id => changed_description.id, :script_name => prefix)
+          inlines << {:type => 'TextRun', :text => "  #{l(:teams_view_changes)}",
+                      :selectAction => {:type => 'Action.OpenUrl', :url => URI.join(base_url, path).to_s}}
+        end
+        adaptive_card[:body] << {:type => 'RichTextBlock', :inlines => inlines}
+        sources << {:text => changed_description.value.presence || '—', :formatting => Setting.text_formatting}
+      end
+      if sections.is_a?(Hash)
+        inlines = sections[:inlines].reject { |run| run[:text].to_s.empty? }
+        description << {:type => 'RichTextBlock', :inlines => inlines} if inlines.any?
+      elsif sections.present?
+        sources << {:text => sections,
+                    :formatting => Setting.text_formatting,
+                    :title => changed_description ? l(:field_notes) : nil}
+      end
+      remaining = 14000
+      notes_heading = nil
+      sources.each do |part|
+        source = part[:text].to_s
+        truncated ||= source.length > remaining
+        source = source[0, remaining]
+        remaining -= source.length
+        next if source.empty?
+
+        if part[:title]
+          notes_heading = {:type => 'RichTextBlock', :inlines => [
+            {:type => 'TextRun', :text => part[:title], :weight => 'Bolder'}
+          ]}
+          description << notes_heading
+        end
+        begin
+          formatter = AdaptiveFormatter.new(object, base_url)
+          description.concat(formatter.format(source, part[:formatting]))
+          adaptive_card[:version] = '1.5' if formatter.minimum_version == '1.5'
+        rescue StandardError => e
+          Rails.logger.warn("cannot format Microsoft Teams content (#{e.class})")
+          description << {:type => 'RichTextBlock', :inlines => [{:type => 'TextRun', :text => source}]}
+        end
+        description.pop if notes_heading && description.last.equal?(notes_heading)
+      end
+      header = adaptive_card[:body].dup
+      adaptive_card[:body].concat(description)
+      truncation_notice = {:type => 'RichTextBlock', :inlines => [
+        {:type => 'TextRun', :text => l(:teams_body_truncated), :isSubtle => true,
+         :selectAction => {:type => 'Action.OpenUrl', :url => base_url}}
+      ]}
+      adaptive_card[:body] << truncation_notice if truncated
+      adaptive_card[:msteams] = { "width": "Full" }
 
       msg = {}
       msg[:type] = "message"
+      msg[:summary] = object.is_a?(Issue) ? "#{author} #{activity} #{object}" : CGI.unescapeHTML(title.to_s)
+      if adaptive_card[:version] == '1.5'
+        adaptive_card[:fallbackText] = msg[:summary]
+      end
       msg[:attachments] = [
         {
           "contentType": "application/vnd.microsoft.card.adaptive",
           "content": adaptive_card
         }
       ]
+      message_size = lambda do
+        json = msg.to_json
+        [json.bytesize, json.encode(Encoding::UTF_16LE).bytesize].max
+      end
+      while message_size.call > 24000 && (description.any? || fact_set.any?)
+        if description.any?
+          description.pop
+          description.pop if notes_heading && description.last.equal?(notes_heading)
+        else
+          fact_set.pop
+          header -= adaptive_card_sections if fact_set.empty?
+        end
+        adaptive_card[:body] = header + description + [truncation_notice]
+      end
     end
 
     begin
@@ -191,15 +312,38 @@ class Listener < Redmine::Hook::Listener
       client.ssl_config.ssl_version = :auto
       client.post_async url, msg.to_json, {'Content-Type': 'application/json'}
     rescue Exception => e
-      Rails.logger.warn("cannot connect to #{url}")
-      Rails.logger.warn(e)
+      Rails.logger.warn("cannot connect to Microsoft Teams (#{e.class})")
     end
   end
 
 private
-  def get_facts(journal)
+  def get_facts(journal, include_changes = false)
     facts = {}
-    journal.details.map { |d| facts.merge!(detail_to_field d) }
+    empty_value = include_changes ? I18n.t(:label_none) : "-"
+    journal.details.each do |detail|
+      next if include_changes && detail.property == 'attr' && detail.prop_key == 'description'
+      next if include_changes && detail.property == 'attr' && detail.prop_key == 'subject'
+      field = detail_to_field(detail, empty_value)
+      single_value = detail.property == 'attr' && detail.prop_key != 'child_id'
+      if detail.property == 'cf' && detail.custom_field
+        format = detail.custom_field.format.class
+        single_value = !detail.custom_field.multiple? && !format.change_no_details && !format.change_as_diff
+      end
+      if include_changes && single_value
+        if detail.prop_key == 'assigned_to_id'
+          old_value, new_value = [detail.old_value, detail.value].map do |id|
+            escape(Principal.find_by_id(id).to_s).presence || I18n.t(:label_none)
+          end
+        else
+          previous = detail.dup
+          previous.value = detail.old_value
+          old_value = detail_to_field(previous, empty_value).values.first
+          new_value = field.values.first
+        end
+        field = field.transform_values { "#{old_value} → #{new_value}" }
+      end
+      facts.merge!(field)
+    end
     return facts
   end
 
@@ -316,7 +460,7 @@ private
     project.module_enabled?(:microsoftteams)
   end
 
-  def detail_to_field(detail)
+  def detail_to_field(detail, empty_value)
     case detail.property
     when "cf"
       custom_field = detail.custom_field
@@ -355,8 +499,8 @@ private
       category = IssueCategory.find(detail.value) rescue nil
       value = escape category.to_s
     when "assigned_to"
-      user = User.find(detail.value) rescue nil
-      value = escape user.to_s
+      principal = Principal.find_by_id(detail.value)
+      value = escape principal.to_s
     when "fixed_version"
       version = Version.find(detail.value) rescue nil
       value = escape version.to_s
@@ -368,7 +512,7 @@ private
       value = "[#{escape issue}](#{object_url issue})" if issue
     end
 
-    value = "-" if value.empty?
+    value = empty_value if value.empty?
     return { title => value }
   end
 
@@ -387,32 +531,6 @@ private
     # teams usernames may only contain lowercase letters, numbers,
     # dashes and underscores and must start with a letter or number.
     text.scan(/@[a-z0-9][a-z0-9_\-]*/).uniq
-  end
-
-  def extract_pre_content(text)
-    results = []
-    matches = text.scan(/(?:<pre>(.*?)<\/pre>|(.*?))(?=<pre>|$)/m)
-    matches.each do |match|
-      if match[0].nil?
-        results << { content: match[1].strip, is_pre: false } if not match[1].empty?
-      else
-        results << { content: match[0].strip, is_pre: true }
-      end
-    end
-    return results
-  end
-
-  def get_adaptive_format(sections)
-    body = []
-    results = extract_pre_content(sections.to_s.gsub("\r", "\n"))
-    results.each do |result|
-      if result[:is_pre]
-        body << {"type": "TextBlock", "text": result[:content], "wrap": true, "fontType": "monospace"}
-      else
-        body << {"type": "TextBlock", "text": result[:content], "wrap": true}
-      end
-    end
-    return body
   end
 
   def limit_string_length(str)
