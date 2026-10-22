@@ -162,6 +162,18 @@ class Listener < Redmine::Hook::Listener
           fact_set << { "title": name, "value": CGI.unescapeHTML(value.to_s) }
         end
       end
+      literal_cf_changes = []
+      if journal && object.is_a?(Issue)
+        journal.details.each do |detail|
+          next unless detail.property == 'cf' && detail.custom_field
+          format = detail.custom_field.format.class
+          next if detail.custom_field.multiple? || format.change_no_details || format.change_as_diff
+          next unless [detail.old_value, detail.value].any? { |value| value.to_s.match?(/&(?:#\d+|#x[0-9a-f]+|[a-z][a-z0-9]+);/i) }
+
+          literal_cf_changes << detail
+          fact_set.reject! { |fact| fact[:title] == detail.custom_field.name }
+        end
+      end
 
       adaptive_card_sections = []
       adaptive_card_sections << {
@@ -195,9 +207,6 @@ class Listener < Redmine::Hook::Listener
           {:type => 'TextRun', :text => " #{l(:wiki_updated_by)} "},
           {:type => 'TextRun', :text => object.content.author.to_s, :italic => true}
         ]}
-        adaptive_card[:body] << {:type => 'RichTextBlock', :inlines => [
-          {:type => 'TextRun', :text => object.content.comments.to_s}
-        ]}
       elsif text
         adaptive_card[:body] << { "type": "TextBlock", "text": CGI.unescapeHTML(text), "wrap": true }
       end
@@ -217,8 +226,29 @@ class Listener < Redmine::Hook::Listener
           ]}
         ]}
       end
+      literal_cf_changes.each do |detail|
+        old_value = detail.old_value.presence || I18n.t(:label_none)
+        new_value = detail.value.presence || I18n.t(:label_none)
+        adaptive_card[:body] << {:type => 'ColumnSet', :columns => [
+          {:type => 'Column', :width => 'auto', :items => [
+            {:type => 'RichTextBlock', :inlines => [
+              {:type => 'TextRun', :text => detail.custom_field.name, :weight => 'Bolder'}
+            ]}
+          ]},
+          {:type => 'Column', :width => 'stretch', :items => [
+            {:type => 'RichTextBlock', :inlines => [
+              {:type => 'TextRun', :text => "#{old_value} → #{new_value}"}
+            ]}
+          ]}
+        ]}
+      end
       adaptive_card[:body].concat(adaptive_card_sections)
       description = []
+      if object.is_a?(WikiPage) && object.content.comments.present?
+        description << {:type => 'RichTextBlock', :inlines => [
+          {:type => 'TextRun', :text => object.content.comments.to_s}
+        ]}
+      end
       truncated = false
       base_url = object ? object_url(object) : "#{Setting.protocol}://#{Setting.host_name}/"
       sources = []
@@ -247,10 +277,10 @@ class Listener < Redmine::Hook::Listener
       remaining = 14000
       notes_heading = nil
       sources.each do |part|
-        source = part[:text].to_s
-        truncated ||= source.length > remaining
-        source = source[0, remaining]
-        remaining -= source.length
+        clusters = part[:text].to_s.each_grapheme_cluster.take(remaining + 1)
+        truncated ||= clusters.length > remaining
+        source = clusters.first(remaining).join
+        remaining -= [clusters.length, remaining].min
         next if source.empty?
 
         if part[:title]
@@ -262,7 +292,6 @@ class Listener < Redmine::Hook::Listener
         begin
           formatter = AdaptiveFormatter.new(object, base_url)
           description.concat(formatter.format(source, part[:formatting]))
-          adaptive_card[:version] = '1.5' if formatter.minimum_version == '1.5'
         rescue StandardError => e
           Rails.logger.warn("cannot format Microsoft Teams content (#{e.class})")
           description << {:type => 'RichTextBlock', :inlines => [{:type => 'TextRun', :text => source}]}
@@ -281,28 +310,46 @@ class Listener < Redmine::Hook::Listener
       msg = {}
       msg[:type] = "message"
       msg[:summary] = object.is_a?(Issue) ? "#{author} #{activity} #{object}" : CGI.unescapeHTML(title.to_s)
-      if adaptive_card[:version] == '1.5'
-        adaptive_card[:fallbackText] = msg[:summary]
-      end
       msg[:attachments] = [
         {
           "contentType": "application/vnd.microsoft.card.adaptive",
           "content": adaptive_card
         }
       ]
+      update_card_version = lambda do
+        if adaptive_table?(adaptive_card[:body])
+          adaptive_card[:version] = '1.5'
+          adaptive_card[:fallbackText] = "#{msg[:summary]} #{base_url}"
+        else
+          adaptive_card[:version] = '1.2'
+          adaptive_card.delete(:fallbackText)
+        end
+      end
+      update_card_version.call
       message_size = lambda do
         json = msg.to_json
         [json.bytesize, json.encode(Encoding::UTF_16LE).bytesize].max
       end
+      plain_preview_added = false
       while message_size.call > 24000 && (description.any? || fact_set.any?)
         if description.any?
-          description.pop
-          description.pop if notes_heading && description.last.equal?(notes_heading)
+          if description.last.equal?(notes_heading)
+            description.pop
+          elsif !trim_adaptive_element(description.last)
+            description.pop
+            description.pop if notes_heading && description.last.equal?(notes_heading)
+          end
+          if description.empty? && !plain_preview_added && sources.any?
+            preview = sources.first[:text].to_s.each_grapheme_cluster.take(512).join
+            description << {:type => 'RichTextBlock', :inlines => [{:type => 'TextRun', :text => preview}]} unless preview.empty?
+            plain_preview_added = true
+          end
         else
           fact_set.pop
           header -= adaptive_card_sections if fact_set.empty?
         end
         adaptive_card[:body] = header + description + [truncation_notice]
+        update_card_version.call
       end
     end
 
@@ -317,13 +364,80 @@ class Listener < Redmine::Hook::Listener
   end
 
 private
+  def adaptive_table?(element)
+    case element
+    when Array
+      element.any? { |item| adaptive_table?(item) }
+    when Hash
+      element[:type] == 'Table' || element.values.any? { |value| adaptive_table?(value) }
+    else
+      false
+    end
+  end
+
+  def trim_adaptive_element(element)
+    case element[:type]
+    when 'RichTextBlock'
+      inlines = element[:inlines]
+      return false if inlines.empty?
+      clusters = inlines.last[:text].to_s.scan(/\X/)
+      if clusters.length > 1
+        inlines.last[:text] = clusters.first((clusters.length + 1) / 2).join
+        true
+      elsif inlines.length > 1
+        inlines.pop
+        true
+      else
+        false
+      end
+    when 'TextBlock'
+      clusters = element[:text].to_s.scan(/\X/)
+      return false if clusters.length < 2
+      element[:text] = clusters.first((clusters.length + 1) / 2).join
+      true
+    when 'Container'
+      trim_adaptive_items(element[:items])
+    when 'ColumnSet'
+      element[:columns].reverse_each do |column|
+        return true if trim_adaptive_items(column[:items])
+      end
+      false
+    when 'Table'
+      rows = element[:rows]
+      minimum = element[:firstRowAsHeaders] ? 2 : 1
+      if rows.length > minimum
+        keep = [(rows.length + 1) / 2, minimum].max
+        rows.slice!(keep, rows.length - keep)
+        return true
+      end
+      rows.reverse_each do |row|
+        row[:cells].reverse_each do |cell|
+          return true if trim_adaptive_items(cell[:items])
+        end
+      end
+      false
+    else
+      false
+    end
+  end
+
+  def trim_adaptive_items(items)
+    return false if items.nil? || items.empty?
+    if items.length > 1
+      keep = (items.length + 1) / 2
+      items.slice!(keep, items.length - keep)
+      return true
+    end
+    trim_adaptive_element(items.first)
+  end
+
   def get_facts(journal, include_changes = false)
     facts = {}
     empty_value = include_changes ? I18n.t(:label_none) : "-"
     journal.details.each do |detail|
       next if include_changes && detail.property == 'attr' && detail.prop_key == 'description'
       next if include_changes && detail.property == 'attr' && detail.prop_key == 'subject'
-      field = detail_to_field(detail, empty_value)
+      field = detail_to_field(detail, empty_value, include_changes)
       single_value = detail.property == 'attr' && detail.prop_key != 'child_id'
       if detail.property == 'cf' && detail.custom_field
         format = detail.custom_field.format.class
@@ -337,7 +451,7 @@ private
         else
           previous = detail.dup
           previous.value = detail.old_value
-          old_value = detail_to_field(previous, empty_value).values.first
+          old_value = detail_to_field(previous, empty_value, include_changes).values.first
           new_value = field.values.first
         end
         field = field.transform_values { "#{old_value} → #{new_value}" }
@@ -460,13 +574,14 @@ private
     project.module_enabled?(:microsoftteams)
   end
 
-  def detail_to_field(detail, empty_value)
+  def detail_to_field(detail, empty_value, adaptive = false)
     case detail.property
     when "cf"
       custom_field = detail.custom_field
       key = custom_field.name
       title = key
       value = (detail.value)? IssuesController.helpers.format_value(detail.value, custom_field) : ""
+      value = escape(value) if adaptive
     when "attachment"
       key = "attachment"
       title = I18n.t :label_attachment

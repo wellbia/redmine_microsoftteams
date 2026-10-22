@@ -4,7 +4,6 @@ require 'uri'
 module RedmineMicrosoftteams
   class AdaptiveFormatter
     BLOCK_TAGS = %w[p h1 h2 h3 h4 h5 h6 pre ul ol table blockquote div hr].freeze
-    attr_reader :minimum_version
 
     def initialize(object, base_url)
       @object = object
@@ -12,7 +11,6 @@ module RedmineMicrosoftteams
     end
 
     def format(text, formatting = Setting.text_formatting)
-      @minimum_version = '1.2'
       html = Redmine::WikiFormatting.to_html(
         formatting, text.to_s.gsub(/\r\n?/, "\n"), :object => @object
       )
@@ -105,7 +103,6 @@ module RedmineMicrosoftteams
           result << {:type => 'Table', :spacing => 'Large', :showGridLines => true, :gridStyle => 'default',
                      :firstRowAsHeaders => rows.first.xpath('./th').length == column_count,
                      :columns => widths.map { |width| {:width => Math.log2(width + 1).round} }, :rows => table_rows}
-          @minimum_version = '1.5'
         when 'hr'
           result << rich_text([{:type => 'TextRun', :text => '—'}], :separator => true)
         end

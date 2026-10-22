@@ -43,7 +43,7 @@ text in each column, using logarithmic scaling rounded to integer weights for
 Teams Workflow compatibility. Missing cells are padded to keep rows aligned.
 Cards containing native tables require Adaptive Cards 1.5 support in both the receiving
 Workflow and Teams client; other cards
-use 1.2. A table card includes its issue summary as fallback text for clients
+use 1.2. A table card includes its issue summary and URL as fallback text for clients
 that cannot display it. Task lists preserve their checked state as read-only text.
 Code blocks use a shaded monospace area with preserved indentation. Inline code
 uses monospace text runs without boxes, with surrounding emphasis and links
