@@ -226,10 +226,11 @@ class Listener < Redmine::Hook::Listener
           ]}
         ]}
       end
+      literal_cf_rows = []
       literal_cf_changes.each do |detail|
         old_value = detail.old_value.presence || I18n.t(:label_none)
         new_value = detail.value.presence || I18n.t(:label_none)
-        adaptive_card[:body] << {:type => 'ColumnSet', :columns => [
+        row = {:type => 'ColumnSet', :columns => [
           {:type => 'Column', :width => 'auto', :items => [
             {:type => 'RichTextBlock', :inlines => [
               {:type => 'TextRun', :text => detail.custom_field.name, :weight => 'Bolder'}
@@ -237,10 +238,14 @@ class Listener < Redmine::Hook::Listener
           ]},
           {:type => 'Column', :width => 'stretch', :items => [
             {:type => 'RichTextBlock', :inlines => [
-              {:type => 'TextRun', :text => "#{old_value} → #{new_value}"}
+              {:type => 'TextRun', :text => old_value.to_s},
+              {:type => 'TextRun', :text => ' → '},
+              {:type => 'TextRun', :text => new_value.to_s}
             ]}
           ]}
         ]}
+        literal_cf_rows << row
+        adaptive_card[:body] << row
       end
       adaptive_card[:body].concat(adaptive_card_sections)
       description = []
@@ -331,8 +336,14 @@ class Listener < Redmine::Hook::Listener
         [json.bytesize, json.encode(Encoding::UTF_16LE).bytesize].max
       end
       plain_preview_added = false
-      while message_size.call > 24000 && (description.any? || fact_set.any?)
-        if description.any?
+      while message_size.call > 24000 && (description.any? || literal_cf_rows.any? || fact_set.any?)
+        if literal_cf_rows.any? && (description.empty? || literal_cf_rows.to_json.bytesize > description.to_json.bytesize)
+          row = literal_cf_rows.max_by { |item| item.to_json.bytesize }
+          unless trim_literal_cf_row(row)
+            literal_cf_rows.delete_if { |item| item.equal?(row) }
+            header.delete_if { |item| item.equal?(row) }
+          end
+        elsif description.any?
           if description.last.equal?(notes_heading)
             description.pop
           elsif !trim_adaptive_element(description.last)
@@ -344,12 +355,21 @@ class Listener < Redmine::Hook::Listener
             description << {:type => 'RichTextBlock', :inlines => [{:type => 'TextRun', :text => preview}]} unless preview.empty?
             plain_preview_added = true
           end
-        else
+        elsif fact_set.any?
           fact_set.pop
           header -= adaptive_card_sections if fact_set.empty?
         end
         adaptive_card[:body] = header + description + [truncation_notice]
         update_card_version.call
+      end
+      if message_size.call > 24000
+        msg[:summary] = msg[:summary].to_s.each_grapheme_cluster.take(256).join
+        adaptive_card[:body] = [truncation_notice]
+        update_card_version.call
+        if message_size.call > 24000
+          Rails.logger.warn('cannot send oversized Microsoft Teams card')
+          return
+        end
       end
     end
 
@@ -364,6 +384,17 @@ class Listener < Redmine::Hook::Listener
   end
 
 private
+  def trim_literal_cf_row(row)
+    inlines = row[:columns].last[:items].first[:inlines]
+    old_clusters = inlines.first[:text].to_s.scan(/\X/)
+    new_clusters = inlines.last[:text].to_s.scan(/\X/)
+    run, clusters = old_clusters.length >= new_clusters.length ? [inlines.first, old_clusters] : [inlines.last, new_clusters]
+    return false if clusters.length < 2
+
+    run[:text] = clusters.first((clusters.length + 1) / 2).join
+    true
+  end
+
   def adaptive_table?(element)
     case element
     when Array
