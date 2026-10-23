@@ -15,3 +15,5 @@ es:
   wiki_updated_by: "actualizado por"
   issue_updated: "ha actualizó"
   issue_created: "ha creado"
+  teams_body_truncated: "Solo se muestra parte del contenido. Abra Redmine para leer el contenido completo."
+  teams_view_changes: "Ver cambios"

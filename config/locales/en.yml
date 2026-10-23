@@ -15,3 +15,5 @@ en:
   wiki_updated_by: "updated by"
   issue_updated: "updated"
   issue_created: "created"
+  teams_body_truncated: "Only part of the content is shown. Open Redmine to read the full content."
+  teams_view_changes: "View changes"

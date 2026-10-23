@@ -15,3 +15,5 @@ ko:
   wiki_updated_by: "updated by"
   issue_updated: "updated"
   issue_created: "created"
+  teams_body_truncated: "본문이 길어 일부만 표시합니다. Redmine에서 전체 내용을 확인하세요."
+  teams_view_changes: "변경 비교 보기"
